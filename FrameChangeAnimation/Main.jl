@@ -8,7 +8,7 @@ BOARD_SIZE = (256, 256)
 # Define the fill percentage of the board
 FILL_PERCENTAGE = 0.5
 # Upscale factor for rendering the board in Makie.jl
-FIG_UPSCALE = 4
+FIG_UPSCALE = 1.4
 
 include("Geometry.jl")
 include("Line.jl")
@@ -91,9 +91,8 @@ blit!(board, wireframe_points)
 # Lasty, we draw the board.
 fig, ax, img = draw(board)
 
-## Animate 
-
-# Define a composed transform that rotates the cube in 3D space as a function of time
+# We now want to animate the cube, so we define a time-dependent transformation.
+# The following is a composed transform that rotates the cube in 3D space as a function of time
 # Composed transforms are read from the bottom-up, so the last transformation is applied first
 TimeTransform(t) = Translation(0,0,3) ∘ # Lastly, move the cube 4 units in the positive z-axis (into the scene)
     LinearMap( # Create a rotation matrix that rotates the cube in 3D space
@@ -102,8 +101,10 @@ TimeTransform(t) = Translation(0,0,3) ∘ # Lastly, move the cube 4 units in the
         RotZ(pi*t/10)        # Same as the previous, but along the Z-axis and a different irrational number
     ) ∘ Translation(-0.5, -0.5, -0.5) # First, center the cube at the origin
 
+
+## Animate 
+
 t = 0.0
-running = true
 
 # While the scene is visible, we update the cube's vertices and draw it to the board
 while events(fig.scene).window_open.val
@@ -133,12 +134,17 @@ fig, ax, img = draw(board)
 
 # Animation parameters
 framerate = 20
-T = 5
+T_p = 2 # Time to pause
+T_l = 1 # Pause length in seconds
+T = 5   # Total time in seconds
 Nframes = framerate*T
 delta_t = 0.6
 
-# Time vector
-time = 0.0:delta_t:delta_t*(Nframes-1)
+# Time vector (with a second pause in the middle)
+time_before_pause = 0.0:delta_t:delta_t*framerate*T_p
+time_at_pause = ones(T_l*framerate) .* time_before_pause[end]
+time_after_pause = time_before_pause[end]+delta_t:delta_t:delta_t*(framerate*T-1)
+time = vcat(time_before_pause, time_at_pause, time_after_pause)
 
 # Record the animation to a gif file. Every frame is an index in the time vector
 # and is yielded to the function as `t`. 
@@ -156,6 +162,8 @@ fig, ax, img = draw(board)
 record(fig, "cube_effect.gif", time; framerate=framerate) do t
     cube = UnitCube()
     cube.vertices = TimeTransform(t).(cube.vertices)
-    flip!(board, draw_wireframe(cube, PerspectiveMap(), BOARD_SIZE))
+    if !isapprox(t, time_before_pause[end]) # Only do flip if not at pause
+        flip!(board, draw_wireframe(cube, PerspectiveMap(), BOARD_SIZE))
+    end
     notify(board)
 end
