@@ -6,8 +6,6 @@ dataRequest.open('GET', dataURL, false);  // Then tell it to fetch the data from
 dataRequest.send(null);
 let japanData = JSON.parse(dataRequest.responseText); // When the data is received, parse it to JSON
 
-const borderDataURL;
-
 /*
  * ====================================================================================================
  *  
@@ -33,37 +31,12 @@ let featureMap = createFeatureMap();
 /*
  * ====================================================================================================
  *
- *                                           GAME VARIABLES
- * 
- * ====================================================================================================
-*/
-
-// PrefecturePathLength er antall prefekturer koblet sammen for 1 runde. Jo færre prefekturer, jo
-// enklere blir runden. Denne skal kunne styres av brukeren
-let PrefecturePathLength = 4;   
-
-// Current path er en liste over prefekturer som spilleren har valgt. 
-let currentPath = [];
-
-// chosenButNotConnected er en liste over prefekturer som spilleren har valgt men som ikke er koblet sammen med
-// noen andre prefekturer i currentPath. Dette er for å holde på prefekturer som spilleren har valgt men som kan
-// bli koblet sammen med andre prefekturer i senere.
-let chosenButNotConnected = [];
-
-// optimalPaths er en liste over alle mulige kombinasjoner av prefekturer som spilleren kan velge som gir mest poeng.
-// hver vei definert i optimalPaths er garantert og være PrefecturePathLength lang. Brukes også tilslutt for å 
-// finne ut om spilleren har valgt en av de optimale veiene.
-let optimalPaths = [];
-
-/*
- * ====================================================================================================
- *
  *                                              GAME CODE
  * 
  * ====================================================================================================
 */
 
-// Følgende kjører kun 1 gang når siden lastes inn, uavhengig om spiller starter en ny runde
+
 ctx.imageSmoothingEnabled = false; // This will make the canvas not smooth out the lines when drawing
 ctx.fillStyle = "black"; // Set the fill color to black
 
@@ -73,10 +46,6 @@ for (let prefectureName in featureMap) {
     new_option.value = featureMap[prefectureName];
     new_option.textContent = prefectureName;
     prefecturePickerEl.appendChild(new_option);
-}
-
-function startRunde() {
-
 }
 
 
@@ -107,7 +76,6 @@ addButtonEl.addEventListener('click', () => {
  * ==================================================================================================== 
 */
 
-// This function creates a new list item in the prefectureListEl and adds an event listener to remove it when clicked.
 function createPrefectureListItem(featureIndex) {
     let listItem = document.createElement('li');
     listItem.textContent = japanData.features[featureIndex].properties.name_1;
@@ -120,9 +88,6 @@ function createPrefectureListItem(featureIndex) {
 
     prefectureListEl.appendChild(listItem);
 }
-
-// 
-
 
 // Because the points are in geographic coordinates, we need to convert them to canvas coordinates.
 // This is done by getting the extent of the possible coordinates and then scaling the points to fit the canvas.

@@ -15,12 +15,16 @@ h1 {
     font-weight: bold;
 }
 
+#regler {
+    width: 40%;
+}
+
 #content {
     width: 100vw;
     height: auto;
     display: flex;
     flex-direction: row;
-    justify-content: center;
+    justify-content: space-evenly;
     align-items: top;
 }
 
@@ -41,4 +45,5 @@ h1 {
     text-decoration: line-through;
     color: red;
     font-style: italic;
+    cursor: pointer;
 }
