@@ -6,7 +6,12 @@ dataRequest.open('GET', dataURL, false);  // Then tell it to fetch the data from
 dataRequest.send(null);
 let japanData = JSON.parse(dataRequest.responseText); // When the data is received, parse it to JSON
 
-const borderDataURL;
+// Så laster vi inn data om grensene til prefekturer. Dette er en annen fil som også ligger på GitHub.
+const borderDataURL = "https://raw.githubusercontent.com/simonabj/CreativeCoding/main/JapanGeographyGame/prefecture_borders.json"
+const borderDataRequest = new XMLHttpRequest();
+borderDataRequest.open('GET', borderDataURL, false);
+borderDataRequest.send(null);
+let borderData = JSON.parse(borderDataRequest.responseText);
 
 /*
  * ====================================================================================================
@@ -121,7 +126,35 @@ function createPrefectureListItem(featureIndex) {
     prefectureListEl.appendChild(listItem);
 }
 
-// 
+// Lag en liste med alle prefekturer som er akuratt N antall steg unna start. Siden grensene er en syklisk graf, må
+// vi også ta hensyn til at vi ikke går tilbake i ring. Dette er da altså et bredde-først-søk.
+function getNStepsAway(start, N) {
+    let queue = [start];
+    let visited = new Set([start]);
+    let distance = {};
+    distance[start] = 0;
+
+    while (queue.length > 0) {
+        let current = queue.shift();
+    
+        // Siden vi gjør bredde-først-søk, vil vi alltid finne den korteste veien først.
+        // Altså kan vi avslutte søket når vi finner en node som er lenger enn N steg unna start.
+        if (distance[current] > N) { 
+            break;
+        }
+
+        for (let neighbor of borderData[current]) {
+            if (!visited.has(neighbor)) {
+                visited.add(neighbor);
+                queue.push(neighbor);
+                distance[neighbor] = distance[current] + 1;
+            }
+        }
+    }
+
+    // Hent så ut alle nodene som er N steg unna start
+    return Object.keys(distance).filter(node => distance[node] === N);
+}
 
 
 // Because the points are in geographic coordinates, we need to convert them to canvas coordinates.
