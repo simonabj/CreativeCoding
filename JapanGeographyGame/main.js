@@ -1,3 +1,8 @@
+// Her legger vi til en funksjon til String-objekter som gjør at vi kan gjøre en string stor forbokstav.
+String.prototype.capitalize = function() {
+    return this.charAt(0).toUpperCase() + this.slice(1);
+}
+
 // I have uploaded the GeoJSON file describing the first-level administrative divisions of Japan to my GitHub repository.
 // The following code fetches the data from the URL and stores it in the japanData variable.
 const dataURL = "https://raw.githubusercontent.com/simonabj/CreativeCoding/main/JapanGeographyGame/First-level_Administrative_Divisions_2015.json"
@@ -6,12 +11,14 @@ dataRequest.open('GET', dataURL, false);  // Then tell it to fetch the data from
 dataRequest.send(null);
 let japanData = JSON.parse(dataRequest.responseText); // When the data is received, parse it to JSON
 
-// Så laster vi inn data om grensene til prefekturer. Dette er en annen fil som også ligger på GitHub.
-const borderDataURL = "https://raw.githubusercontent.com/simonabj/CreativeCoding/main/JapanGeographyGame/prefecture_borders.json"
-const borderDataRequest = new XMLHttpRequest();
-borderDataRequest.open('GET', borderDataURL, false);
-borderDataRequest.send(null);
-let borderData = JSON.parse(borderDataRequest.responseText);
+// Så laster vi inn data om prefekturene. Dette er en annen fil som også ligger på GitHuben min.
+// Dette er data som inneholder informasjon om hvilke prefekturer som grenser til hverandre, navn i kanji, forkortet kanji,
+// kana samt hvilke feature i GeoJSON-filen som representerer prefekturen.
+const prefectureDataURL = "https://raw.githubusercontent.com/simonabj/CreativeCoding/main/JapanGeographyGame/japan_prefectures.json";
+const prefectureDataRequest = new XMLHttpRequest();
+prefectureDataRequest.open('GET', prefectureDataURL, false);
+prefectureDataRequest.send(null);
+let prefectureData = JSON.parse(prefectureDataRequest.responseText).prefectures;
 
 /*
  * ====================================================================================================
@@ -26,14 +33,18 @@ const ctx = canvasEl.getContext('2d');
 const prefectureListEl = document.getElementById('prefList');
 const prefecturePickerEl = document.getElementById('prefPicker');
 const addButtonEl = document.getElementById('addBtn');
+const restartBtnEl = document.getElementById('restartBtn');
+const startTextEl = document.getElementById('startText');
+const endTextEl = document.getElementById('endText');
 
 const resolution = { x: 900, y: 900 };
 canvasEl.width = resolution.x;
 canvasEl.height = resolution.y;
 let canvas_aspect = resolution.x / resolution.y;
 
+let prefectureMap = createPrefectureMap(); // Liste som mapper prefekturnavn til index i PrefectureData filen
+let prefectureIds = createPrefectureIDMap(); // Liste som mapper prefekturID til index i PrefectureData filen
 let prefecturesToDraw = [];
-let featureMap = createFeatureMap();
 
 /*
  * ====================================================================================================
@@ -44,8 +55,8 @@ let featureMap = createFeatureMap();
 */
 
 // PrefecturePathLength er antall prefekturer koblet sammen for 1 runde. Jo færre prefekturer, jo
-// enklere blir runden. Denne skal kunne styres av brukeren
-let PrefecturePathLength = 4;   
+// enklere blir runden. Denne skal kunne styres av brukeren.
+let PrefecturePathLength = 3;   
 
 // Current path er en liste over prefekturer som spilleren har valgt. 
 let currentPath = [];
@@ -60,6 +71,14 @@ let chosenButNotConnected = [];
 // finne ut om spilleren har valgt en av de optimale veiene.
 let optimalPaths = [];
 
+// startPrefecture er en variabel som holder på indexen til prefekturen som spilleren starter fra. 
+// Denne er tilfeldig valgt ved starten av hver runde.
+let startPrefecture = -1; 
+
+// endPrefecture er en variabel som holder på indexen til prefekturen som er målet for spilleren.
+// Denne er tilfeldig valgt blandt de prefekturene som er PrefecturePathLength unna startPrefecture.
+let endPrefecture = -1;
+
 /*
  * ====================================================================================================
  *
@@ -72,18 +91,35 @@ let optimalPaths = [];
 ctx.imageSmoothingEnabled = false; // This will make the canvas not smooth out the lines when drawing
 ctx.fillStyle = "black"; // Set the fill color to black
 
-// Create options for the select element
-for (let prefectureName in featureMap) {
+// Lag en liste over alle prefekturer som spilleren kan velge fra. Disse vises i en dropdown-meny
+// som er tilgjenglig for spilleren dersom de velger en enkel modus.
+for (let prefectureName in prefectureMap) {
     let new_option = document.createElement('option');
-    new_option.value = featureMap[prefectureName];
-    new_option.textContent = prefectureName;
+    new_option.value = prefectureMap[prefectureName];
+    new_option.textContent = prefectureName.capitalize();
     prefecturePickerEl.appendChild(new_option);
 }
 
 function startRunde() {
+    // Velg en tilfeldig prefektur å starte fra
+    startPrefecture = randomFromList(Object.keys(prefectureIds));
+    endPrefecture = randomFromList(getNStepsAway(startPrefecture, PrefecturePathLength+1));
 
+    startTextEl.textContent = find("id", startPrefecture).en.capitalize();
+    endTextEl.textContent = find("id", endPrefecture).en.capitalize();
+
+    addPrefecture(prefectureIds[startPrefecture]);
+    addPrefecture(prefectureIds[endPrefecture]);
+    drawPrefectures();
 }
 
+function restartRunde() {
+    prefecturesToDraw = [];
+
+    startRunde();
+}
+
+startRunde();
 
 /*
  * ====================================================================================================
@@ -94,14 +130,16 @@ function startRunde() {
 */
 
 addButtonEl.addEventListener('click', () => {
-    let selectedFeatureIndex = prefecturePickerEl.value;
+    let selectedPrefectureIndex = Number(prefecturePickerEl.value);
     // Only add the feature if it's not already in the list
-    if (!prefecturesToDraw.includes(selectedFeatureIndex)) {
-        createPrefectureListItem(selectedFeatureIndex)
-        addPrefecture(selectedFeatureIndex);
+    if (!prefecturesToDraw.includes(selectedPrefectureIndex)) {
+        createPrefectureListItem(selectedPrefectureIndex)
+        addPrefecture(selectedPrefectureIndex);
         drawPrefectures();
     }
 });
+
+restartBtnEl.addEventListener('click', restartRunde);
 
 
 /* 
@@ -112,27 +150,41 @@ addButtonEl.addEventListener('click', () => {
  * ==================================================================================================== 
 */
 
-// This function creates a new list item in the prefectureListEl and adds an event listener to remove it when clicked.
-function createPrefectureListItem(featureIndex) {
+// Hjelpe funksjon for å finne en prefektur basert på en egenskap og en verdi.
+// Eksempel: find("en", "saitama") eller find("short", "東京")
+function find(term, value) {
+    return prefectureData.filter(prefecture => prefecture[term] == value)[0];
+}
+
+// Denne funksjonen lager et nytt listeelement i prefectureListEl og legger til en eventlistener som fjerner den 
+// når den blir klikket på.
+function createPrefectureListItem(prefectureIndex) {
     let listItem = document.createElement('li');
-    listItem.textContent = japanData.features[featureIndex].properties.name_1;
+    listItem.textContent = prefectureData[prefectureIndex].en.capitalize();
     listItem.classList.add('prefListItem');
     listItem.addEventListener('click', () => {
         listItem.parentNode.removeChild(listItem);
-        removePrefecture(featureIndex);
+        removePrefecture(prefectureIndex);
         drawPrefectures();
     });
 
     prefectureListEl.appendChild(listItem);
 }
 
-// Lag en liste med alle prefekturer som er akuratt N antall steg unna start. Siden grensene er en syklisk graf, må
-// vi også ta hensyn til at vi ikke går tilbake i ring. Dette er da altså et bredde-først-søk.
-function getNStepsAway(start, N) {
-    let queue = [start];
-    let visited = new Set([start]);
+// Funksjon som returnerer et tilfeldig element fra en liste
+function randomFromList(list) {
+    return list[Math.floor(Math.random() * list.length)];
+}
+
+// Lag en liste med alle prefekturer som er akuratt N antall steg unna start. 
+// Siden grensene er en syklisk graf, må vi også ta hensyn til at vi ikke går tilbake i ring. 
+// Dette gjøres ved et bredde-først-søk. https://en.wikipedia.org/wiki/Breadth-first_search
+// Merk, start er id'en til en prefektur som definert i PrefectureData filen.
+function getNStepsAway(start_id, N) {
+    let queue = [start_id];
+    let visited = new Set([start_id]);
     let distance = {};
-    distance[start] = 0;
+    distance[start_id] = 0;
 
     while (queue.length > 0) {
         let current = queue.shift();
@@ -143,7 +195,7 @@ function getNStepsAway(start, N) {
             break;
         }
 
-        for (let neighbor of borderData[current]) {
+        for (let neighbor of find("id", current).neighbor) {
             if (!visited.has(neighbor)) {
                 visited.add(neighbor);
                 queue.push(neighbor);
@@ -156,22 +208,23 @@ function getNStepsAway(start, N) {
     return Object.keys(distance).filter(node => distance[node] === N);
 }
 
-
-// Because the points are in geographic coordinates, we need to convert them to canvas coordinates.
-// This is done by getting the extent of the possible coordinates and then scaling the points to fit the canvas.
+// Siden punktene er i geografiske (lengde- og breddegrad) koordinater, må vi konvertere disse til canvas-koordinater.
+// Vi antar at japan er såpass lite at en flat projeksjon på canvas holder, så vi gjør kun en enkel lineær transformasjon
+// for å konvertere fra geografiske koordinater til canvas-koordinater.
 function convertToCanvasCoords(long, lat, bbox = japanData.bbox) {
     let width = canvasEl.width;
     let height = canvasEl.height;
 
-    // Subtract the minimum form x and y to get a value between 0 and the maximum
-    // Then divide by the maximum (also subtracting the minimum) to get a value between 0 and 1
-    // Lastly, multiply by the width and height to get a value between 0 and the width/height
+    // Trekk fra minimumet for x og y for å få en verdi mellom 0 og maksimumet
+    // Del så på maksimumet (med minimumet også trekt fra) for å få en verdi mellom 0 og 1
+    // Til slutt, multipliser med bredde/høyde av canvas for å få en verdi mellom 0 og bredde/høyde
     let x = (long - bbox[0]) / (bbox[2] - bbox[0]) * width;
     let y = height - (lat - bbox[1]) / (bbox[3] - bbox[1]) * height;
     return [x, y];
 }
 
-// Simply return the bounding box of a feature
+// Lag en bounding-box for gitt feature i GeoJSON fila. Disse bestemmer hjørnene i et rektangel som garanterer og inneholde
+// alle punktene i et polygon.
 function getFeatureBBox(featureIndex) {
     let minX = Infinity;
     let minY = Infinity;
@@ -191,17 +244,17 @@ function getFeatureBBox(featureIndex) {
     return [minX, minY, maxX, maxY];
 }
 
-// Returns the number of sub-features in a feature (i.e. the number of polygons in a MultiPolygon)
+// Siden GeoJSON beskriver MultiPolygons, kan vi ha flere polygoner i en feature. Denne funksjonen returnerer
+// hvor mange polygoner det er i en feature
 function numSubFeatures(featureIndex) {
     return japanData.features[featureIndex].geometry.coordinates.length;
 }
 
-// Gets the bounding box of all the features in the prefecturesToDraw array
-// and creates a new bounding box that surrounds all of them.
+// SurroundingBBox kombinerer alle bounding boxes til en stor bounding box som inneholder alle punktene i alle polygonene.
 function surroundingBBox() {
     let [minX, minY, maxX, maxY] = [Infinity, Infinity, -Infinity, -Infinity]; // Same as above, but shorter
-    for (let featureIndex of prefecturesToDraw) {
-        let bbox = getFeatureBBox(featureIndex);
+    for (let prefectureIndex of prefecturesToDraw) {
+        let bbox = getFeatureBBox(prefectureData[prefectureIndex].featureIndex);
         minX = Math.min(minX, bbox[0]);
         minY = Math.min(minY, bbox[1]);
         maxX = Math.max(maxX, bbox[2]);
@@ -210,7 +263,8 @@ function surroundingBBox() {
     return [minX, minY, maxX, maxY];
 }
 
-// Streches the bounding box to fit the aspect ratio of the canvas
+// Siden vi ønsker å opprettholde forholdet mellom bredde og høyde av det vi tegner, så må vi strekke bounding boxen til å
+// passe Canvas. Dette gjøres ved en enkel lineær transformasjon.
 function normalizeBBox(bbox) {
     let bbox_aspect = (bbox[2] - bbox[0]) / (bbox[3] - bbox[1]);
     let bbox_width = bbox[2] - bbox[0];
@@ -226,36 +280,55 @@ function normalizeBBox(bbox) {
     return [bbox_center_x - bbox_width / 2, bbox_center_y - bbox_height / 2, bbox_center_x + bbox_width / 2, bbox_center_y + bbox_height / 2];
 }
 
-// Constructs a map of the features in the GeoJSON data,
-// where the key is the name of the feature and the value 
-// is the index of the feature in the data.
-// Example: featureMap["Saitama"] = 34
-function createFeatureMap() {
-    let featureMap = {}
-    for (let i = 0; i < japanData.features.length; i++) {
-        let feature = japanData.features[i];
-        let name = feature.properties.name_1;
-        featureMap[name] = i;
+// Konstruer et map over alle prefecturer og deres index i PrefectureData filen
+function createPrefectureMap() {
+    let prefectureMap = {}
+    for (let i = 0; i < prefectureData.length; i++) {
+        let prefecture = prefectureData[i];
+        let name = prefecture.en;
+        prefectureMap[name] = i;
     }
-    return featureMap;
+    return prefectureMap;
 }
 
-// The drawFeature function will take an index of a feature in the GeoJSON data and draw it on the canvas.
-function addPrefecture(featureIndex) {
-    prefectureName = japanData.features[featureIndex].properties.name_1;
+// Identisk til createPrefectureMap over, men denne binder ID'en til prefekturen til indexen i PrefectureData filen.
+// Dette brukes for å raskt slå opp prefectureIndex fra en ID.
+function createPrefectureIDMap() {
+    let prefectureMap = {}
+    for (let i = 0; i < prefectureData.length; i++) {
+        let prefecture = prefectureData[i];
+        let name = prefecture.id;
+        prefectureMap[name] = i;
+    }
+    return prefectureMap;
+}
+
+// drawFeature funksjonen tar en index av en prefecture og legger til den 
+// til lista over prefecturesToDraw
+function addPrefecture(prefectureIndex) {
+    if (prefecturesToDraw.includes(prefectureIndex)) {
+        console.log("Prefecture already in list. Skipping.")
+        return;
+    }
+
+    prefectureName = prefectureData[prefectureIndex].en;
     console.log(`Adding ${prefectureName} to the list of prefectures to draw`);
-    prefecturesToDraw.push(featureIndex);
+    prefecturesToDraw.push(prefectureIndex);
 }
 
+// Samme som over, men fjerner en feature fra lista
 function removePrefecture(featureIndex) {
     prefecturesToDraw = prefecturesToDraw.filter((index) => index !== featureIndex);
     console.log(`Removing ${japanData.features[featureIndex].properties.name_1} from the list of prefectures to draw`);
 }
 
+// drawPrefectures funksjonen tegner alle prefekturer som er i lista over prefecturesToDraw.
+// Den burde kun kjøres når lista over prefecturesToDraw endres.
 function drawPrefectures() {
     // Clear the canvas
     ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
 
+    // Get the bounding box of all the prefectures to draw
     let bbox = surroundingBBox();
     let bbox_aspect = (bbox[2] - bbox[0]) / (bbox[3] - bbox[1]);
     console.log("Bounding box aspect ratio: " + bbox_aspect);
@@ -263,13 +336,14 @@ function drawPrefectures() {
 
     bbox = normalizeBBox(bbox);
     bbox_aspect = (bbox[2] - bbox[0]) / (bbox[3] - bbox[1]);
-    console.log("Normalized bounding box aspect ratio: " + bbox_aspect);
 
     // If the bounding box is wider than the canvas, we need to scale the y-coordinates of the bbox
     // bbox = bbox_aspect > canvas_aspect ? [bbox[0], bbox[1], bbox[2], bbox[1] + (bbox[2] - bbox[0]) / canvas_aspect] : bbox;
 
     // For every feature in the prefecturesToDraw array, draw it on the canvas
-    for (let featureIndex of prefecturesToDraw) {
+    for (let prefectureIndex of prefecturesToDraw) {
+        // Hent ut indexen til featuren i GeoJSON filen som representerer prefekturen
+        let featureIndex = prefectureData[prefectureIndex].featureIndex;
 
         // The coordinates are stored in the geometry.coordinates property, and is a MultiPolygon.
         // Lets start by drawing the first polygon in the MultiPolygon. A multi-polygon is an array of polygons,
@@ -278,7 +352,6 @@ function drawPrefectures() {
         // Docs: https://geojson.org/geojson-spec.html#polygon (and) https://geojson.org/geojson-spec.html#multipolygon
         for (let subFeatureIndex in japanData.features[featureIndex].geometry.coordinates) {
             let polygon = japanData.features[featureIndex].geometry.coordinates[subFeatureIndex][0];
-
 
             // Move to the first point
             ctx.beginPath();

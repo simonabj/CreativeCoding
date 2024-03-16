@@ -47,3 +47,10 @@ h1 {
     font-style: italic;
     cursor: pointer;
 }
+
+#startend {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    font-size: 20px;
+}
