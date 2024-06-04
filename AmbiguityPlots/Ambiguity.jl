@@ -9,27 +9,30 @@ function ambiguity(s; domain=(-20,20), resolution=1000)
     end
 end
 
-LFM(f0, f1, T) = t -> begin
-    if t < 0 || t > T
-        return 0
+create_continuous_signal(s, time, fs) = t -> (time[1] <= t < time[end]) ? s[floor(Int, t / fs + 1)] : 0.0im
+
+function discrete_ambiguity(s, t, fs)
+
+    return (τ, f) -> begin
+        return sum(
+            [s_d(ti) * conj(s_d(ti - τ)) * exp(2π * f * ti * im)
+             for ti in t])
     end
-    return exp(2π * im * (f0 * t + (f1 - f0) * t^2 / (2T)))
 end
 
-T = 20.0
-t = 0:0.01:T
-s = LFM(0.0,5.0,T) 
 
-lines(t, real.(s.(t)))
 
-amb = ambiguity(s; domain=(-20,20), resolution=1000)
 
-function ambiguity_plot(amb; N = 500, freqs=range(-5,5,N), delays=range(-20,20,N))
+function ambiguity_plot(
+    amb; 
+    N = 500, freqs=range(-5,5,N), delays=range(-20,20,N), 
+    axis=(title="Ambiguity plot",), 
+    figure=(size=(500,400),)
+)
     amb_s = zeros(length(delays), length(freqs));
     @showprogress for (i,τ) in enumerate(delays), (j,f) in enumerate(freqs)
-            amb_s[i, j] = abs(amb(τ, f))
+            amb_s[i, j] = abs(amb(τ, f))^2
     end
-    return heatmap(delays, freqs, amb_s, colormap = :viridis, axis=(title="Ambiguity plot", xlabel="Delay τ [samples]", ylabel="Doppler f [Hz]"))
+    amb_s /= maximum(amb_s[:])
+    return heatmap(delays, freqs, amb_s, colormap = :viridis, axis=axis, figure=figure)
 end
-
-ambiguity_plot(amb)
