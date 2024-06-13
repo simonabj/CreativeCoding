@@ -20,8 +20,62 @@ function discrete_ambiguity(s, t, fs)
     end
 end
 
+# Function to calculate the ambiguity function
+function ambiguity_function2(signal::Vector{ComplexF64}, fs::Real;
+        delay_cut = 0.5)
+    N = length(signal)
+    delays = -N+1:N-1
+    doppler_shifts = (-N/2:N/2-1) * (fs / N)
 
+    # Cut the delays to avoid aliasing
+    delays = delays[abs.(delays) .<= delay_cut * N]
 
+    # Initialize the ambiguity function matrix
+    AF = zeros(ComplexF64, length(delays), N)
+    
+    # Compute the ambiguity function
+    for (k, delay) in enumerate(delays)
+        # Shift the signal by the delay
+        shifted_signal = circshift(signal, delay)
+        # Compute the cross-ambiguity function for this delay
+        AF[k, :] .= ifftshift(ifft(fft(signal) .* conj(fft(shifted_signal))))
+    end
+    
+    # Prepare axes for plotting
+    delay_axis = delays / fs
+    doppler_axis = doppler_shifts
+
+    return delay_axis, doppler_axis, AF
+end
+
+function ambiguity_function(signal, fs; doppler_cut = 1.0)
+    N = length(signal)
+    τ = -(N÷2-1):(N÷2-1)
+    Fd = -fs/2:fs/N:fs/2-fs/N;
+
+    snorm = signal ./ norm(signal)
+    # snorm = signal
+
+    AF = zeros(length(τ), N)
+    @showprogress for m in eachindex(τ)
+        s_shift = localshift(snorm, τ[m])
+        AF[m, :] = abs.(ifftshift(ifft(fft(snorm).*conj(fft(s_shift)))))
+    end
+    AF *= N
+
+    return τ ./ fs, Fd,  AF
+end
+
+function localshift(x, τ)
+    N = length(x)
+    seq = zeros(ComplexF64, N) 
+    if τ >= 0
+        seq[1:N-τ] = x[1+τ:N];
+    else
+        seq[1-τ:N] = x[1:N+τ];
+    end
+    return seq
+end
 
 function ambiguity_plot(
     amb; 

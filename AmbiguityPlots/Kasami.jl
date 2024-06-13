@@ -45,3 +45,9 @@ function kasami_code(N=4)
     end
 end
 
+function kasami_set(N)
+    generator = kasami_code(N)
+    return [
+        generator(t) for t in 0:2^(N÷2)-1
+    ] |> x -> reduce(hcat, x)
+end

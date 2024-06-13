@@ -1,3 +1,7 @@
+function BPSK_encoding(seq)
+    return 2.0 * seq .- 1.0
+end
+
 """
 Create a BPSK signal from a binary sequence.
 
@@ -8,7 +12,7 @@ Parameters:
     T_b: Float64 - Bit period
     f_c: Float64 - Carrier frequency
 """
-function bpsk(seq, t, fs, T_b, f_c)
+function BPSK(seq, t, fs, T_b, f_c)
     bpsk_seq = zeros(ComplexF64, length(t))
     for i in eachindex(seq)
         t_start = round(Int, (i - 1) * fs * T_b + 1)
