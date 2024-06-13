@@ -8,6 +8,7 @@ bg = :transparent
 set_theme!(Theme(
     fontsize = 20,
     palette = ( color = tab10,),
+    backgroundcolor = bg,
     Axis = (
         backgroundcolor = bg,
         xtickcolor = fg, ytickcolor = fg,
