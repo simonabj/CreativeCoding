@@ -33,6 +33,9 @@ N = range(0,1,1000)
 K = [S(n,m) for n in N, m in M]
 
 heatmap(N, M, K,colormap=:jet, axis=(yreversed=true,aspect=DataAspect(), xticks=range(0,1,11), yticks=range(0,1,11)))
+
+
+
 ## Functions
 
 function step(board)
