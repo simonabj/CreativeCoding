@@ -28,7 +28,7 @@ b = 1
 b1,b2 = 0.278, 0.365
 d1,d2 = 0.267, 0.445
 
-dt = 1/16
+dt = 1/32
 
 kd = zeros(NY, NX)
 kr = zeros(NY, NX)
@@ -90,9 +90,9 @@ function add_speckles!(field, ny, nx, ra, count, intensity)
     end
 end
 
-function init_field(ny, nx, ra)
+function init_field(ny, nx, ra; D = 50)
     field = zeros(ny, nx)
-    add_speckles!(field, ny, nx, ra, 50, 1.0)
+    add_speckles!(field, ny, nx, ra, D, 1.0)
     return field
 end
 
@@ -128,27 +128,131 @@ end
 
 ## Test loop
 
-F = Figure()
-ax = Axis(F[1,1], aspect=DataAspect())
-hidedecorations!(ax)
-hidespines!(ax)
+# F = Figure()
+# ax = Axis(F[1,1], aspect=DataAspect())
+# hidedecorations!(ax)
+# hidespines!(ax)
 
-field = init_field(NY, NX, h3)
+# field = init_field(NY, NX, h3)
 
-field_node = Observable(field)
-hm = heatmap!(ax, field_node, colorrange = (0,1))
+# field_node = Observable(field)
+# hm = heatmap!(ax, field_node, colorrange = (0,1))
 
-function step()
-    global field
-    field = clamp(forward_euler(field, dt))
-    field_node[] = field
-end
+# function step()
+#     global field
+#     field = clamp(forward_euler(field, dt))
+#     field_node[] = field
+# end
 
-display(F)
+# display(F)
 
 
-# Loop
-while events(F).window_open.val
-    step() 
-    sleep(1/60)
-end
+## Interactive app
+
+function app()
+    F = Figure(size=(1700, 1200))
+    buffer_grid = F[1,1] = GridLayout()
+    S_ax = Axis(buffer_grid[1,1], title="Transfer function", xticks=0:0.1:1, yticks=0:0.2:1, xlabel="N - Neighbors", ylabel="M - Self State", width=700, aspect=DataAspect())
+
+    field_ax = Axis(F[1:2,2], title="Simulation", aspect=DataAspect())
+    hidedecorations!(field_ax)
+    hidespines!(field_ax)
+
+    sliders = SliderGrid(F,
+        (label="b1", range=0.0:0.01:1.0, startvalue=b1),
+        (label="b2", range=0.0:0.01:1.0, startvalue=b2),
+        (label="d1", range=0.0:0.01:1.0, startvalue=d1),
+        (label="d2", range=0.0:0.01:1.0, startvalue=d2),
+        (label="ra", range=1.0:1:100.0, startvalue=h3),
+        (label="Td", range=1:10:1024, startvalue=1/dt),
+        (label="Speckle Density", range=0:1:500, startvalue=50),
+        ; width=700
+    )
+    refresh_btn = Button(F, label="Refresh")
+    start_btn = Button(F, label="Start")
+    stop_btn = Button(F, label="Stop")
+    record_btn = Button(F, label="Record")
+
+    controls_grid = F[2,1] = vgrid!(
+        sliders,
+        hgrid!(
+            start_btn,
+            stop_btn,
+            refresh_btn,
+            record_btn,
+        );
+        width=700
+    )
+
+    N = range(0,1,250)
+    M = range(0,1,250)
+    K = [S(n, m) for n in N, m in M]
+
+    field = init_field(NY, NX, h3)
+    
+    transfer_node = Observable(K)
+    field_node = Observable(field)
+
+    is_running = Observable(false)
+
+    function step()
+        field_node[] = clamp(rk4(field_node.val, dt))
+    end
+
+    function record()
+        is_running[] = false
+
+        record("out/smoothlife.mp4", field_ax, 1:600; framerate=30) do _
+            step()
+        end
+        println("Recording done")
+    end
+
+    function start()
+        if is_running[]
+            return
+        end
+
+        println("Starting simulation")
+        is_running[] = true
+        while is_running[]
+            step()
+            sleep(0.1)
+        end
+        println("Stopped")
+    end
+
+    function stop()
+        is_running[] = false
+    end
+
+    heatmap!(S_ax, N, M, transfer_node, colormap = :jet)
+    heatmap!(field_ax, field_node, colorrange = (0,1), colormap = :grays)
+
+    lift([s.value for s in sliders.sliders]...) do vals...
+        global b1, b2, d1, d2, h3, dt = vals
+        global h = h3 / 3
+
+        K = [S(n, m; b1=vals[1], b2=vals[2], d1=vals[3], d2=vals[4]) for n in N, m in M]
+        transfer_node[] = K
+    end
+
+    on(refresh_btn.clicks) do _
+        field = init_field(NY, NX, h3; D=sliders.sliders[end].value.val)
+        field_node[] = field
+    end
+
+    on(start_btn.clicks) do _
+        schedule(@task start())
+    end
+
+    on(stop_btn.clicks) do _
+        stop()
+    end
+
+    on(record_btn.clicks) do _
+        schedule(record())
+    end
+
+    return F
+end; app()
