@@ -21,7 +21,7 @@ kwargs = {
     'stdin':subprocess.PIPE
 }
 
-def speak(audio, name):
+def play(audio, name):
     audio.export(name, format = "wav")
     rvc_start_time = time.time()
     glados_rvc.run(name) 
@@ -40,13 +40,13 @@ def speak(audio, name):
                 subprocess.Popen(["pw-play", name], **kwargs)
     
 
-def run(text, alpha: float=1.0, delay: float=0.1):
+def speak(text, alpha: float=1.0, delay: float=0.1):
         download('punkt',quiet=True)
         sentences = sent_tokenize(text)
         audio = glados_tts.run_tts(sentences[0])
         pause = AudioSegment.silent(duration=delay)
         old_line = AudioSegment.silent(duration=1.0) + audio
-        speak(old_line, "old_line.wav")
+        play(old_line, "old_line.wav")
         old_time = time.time()
         old_dur = old_line.duration_seconds
         new_dur = old_dur
@@ -66,9 +66,9 @@ def run(text, alpha: float=1.0, delay: float=0.1):
                 else:
                     time.sleep(time_left + delay)
                 if idx % 2 == 1:
-                    speak(new_line, "new_line.wav")
+                    play(new_line, "new_line.wav")
                 else:
-                    speak(old_line, "old_line.wav")
+                    play(old_line, "old_line.wav")
                 old_time = time.time()
                 old_dur = new_dur
         else:
@@ -83,4 +83,4 @@ if __name__ == "__main__":
     while True:
         text = input("Input: ")
         if len(text) > 0:
-            run(text)
+            speak(text)

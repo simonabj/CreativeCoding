@@ -14,3 +14,5 @@ rvc-python~=0.0.7
 torch~=2.0.0
 torchvision~=0.15.0
 torchaudio~=2.0.0
+voyageai~=0.2.3
+pymilvus~=2.4.4

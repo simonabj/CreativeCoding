@@ -36,6 +36,7 @@ _abbreviations = [(re.compile('\\b%s\\.' % x[0], re.IGNORECASE), x[1]) for x in 
     ('col', 'colonel'),
     ('ft', 'fort'),
     ('aeon', 'eon'),
+    ('°C', 'degrees celsius'),
 ]]
 
 
