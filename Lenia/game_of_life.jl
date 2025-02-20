@@ -2,7 +2,7 @@ using DSP
 using GLMakie
 
 # Load the data
-BOARD_SIZE = (250, 250)
+BOARD_SIZE = (100, 100)
 
 # Discrete GoL transfer function
 S(N, M) = ifelse(((3 - M) <= N) & (N <= 3), 1, 0)

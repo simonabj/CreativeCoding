@@ -196,7 +196,7 @@ function app()
     is_running = Observable(false)
 
     function step()
-        field_node[] = clamp(rk4(field_node.val, dt))
+        field_node[] = clamp(forward_euler(field_node.val, dt))
     end
 
     function record()
